@@ -3,10 +3,11 @@
 # by: Alex, Matias
 # UCT
 
-EPS_DET    = 1e-10   # 
-EPS_COORD  = 1e-5    # 
+# Variables Globales
+EPS_DET    = 1e-10   # su funcion principal es evitar los errores matematicos
+EPS_COORD  = 1e-5    # evita errores de calculo
 MARGEN     = 1e-4    # Margen de error para comparaciones de punto flotante.
-ROUND_DIG  = 4       # 
+ROUND_DIG  = 4       # Redondea los números a 4 decimales
 MIN_RANGO  = 10      # Valor mínimo de referencia cuando no hay intersecciones grandes
 ESCALA_EJE = 1.1     # Factor de expansión de los límites de los ejes
 MARGEN_NEG = 0.05    # Fracción de margen negativo en los ejes (origen visual)
@@ -16,8 +17,7 @@ N_PUNTOS_X = 400     # Resolución del array x para graficar rectas
 PAUSA_SEG  = 0.8     # Pausa entre restricciones al graficar (segundos)
 ESCALA_HULL   = 0.95  # Fracción del límite del eje usada para puntos extra del hull
 COLOR_ANOTACION = 'yellow' 
-COLOR_FLECHA   = 'blue'
-
+COLOR_FLECHA   = 'blue' 
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -28,6 +28,7 @@ from itertools import combinations
 def formato_numero(num):
     return f"{int(num)}" if num == int(num) else f"{num:.2f}"
 
+# Funciones de lectura de datos
 def leer_entero(mensaje):
     while True:
         try:
@@ -77,7 +78,6 @@ def ingresar_datos():
         Restriccion.append(Tipo_Restriccion)
         
     return np.array(Matriz), Restriccion, (Coeficiente_x,Coeficiente_y), tipo_funcion
-    # el return devuelve una tupla con esos 4 elementos
 
 
 # Muestra el sistema de restricciones ingresado por el usuario
@@ -117,46 +117,35 @@ def calcular_intersecciones(Matriz):
 
 def evaluar_optimo(optimos, objetivo_funcion, tipo_funcion, ax):
     c_x, c_y = objetivo_funcion
-    mejor_z, mejor_pt = None,None # no encontrados inicialmente
     for x, y in optimos: # el optimo es un problema lineal con region factible acotada, está en uno de los vertices. Evaluamos todos
-        z = c_x * x + c_y * y
-        print(f"Z({formato_numero(x)}, {formato_numero(y)}) = {formato_numero(z)}") # ver el valor de z en cada vertice 
+        print(f"Z({formato_numero(x)}, {formato_numero(y)}) = {formato_numero(c_x * x + c_y * y)}") # ver el valor de z en cada vertice 
         
-        if mejor_z is None or (tipo_funcion == 'max' and z > mejor_z) or (tipo_funcion == 'min' and z < mejor_z): # decide si el punto actual es mejor que el mejor encontrado hasta ahora.
-            mejor_z = z
-            mejor_pt = (x, y)
+    calc_z = lambda pt: c_x * pt[0] + c_y * pt[1]
+    mejor_pt = max(optimos, key=calc_z) if tipo_funcion == 'max' else min(optimos, key=calc_z)
+    mejor_z = calc_z(mejor_pt)
     
-    if mejor_pt: # comprueba que se encontró al menos un punto optimo 
-        x_o, y_o = mejor_pt
-        tipo_texto = "Máximo" if tipo_funcion == 'max' else "Mínimo"
-        print(f"\nPunto óptimo ({tipo_texto}): ({formato_numero(x_o)}, {formato_numero(y_o)}) con Z = {formato_numero(mejor_z)}")
-        
-        ax.plot(
-            x_o, y_o, 'ro',
-            markersize=10,
-            label=f'Solución Óptima ({tipo_texto})',
-            zorder=10
-        )
-        ax.annotate(
-            f"SOLUCIÓN\n({formato_numero(x_o)}, {formato_numero(y_o)})\nZ={formato_numero(mejor_z)}",
-            (x_o, y_o),
-            xytext=(15, 15),
-            textcoords='offset points',
-            bbox=dict(boxstyle="round,pad=0.3", fc='yellow', alpha=0.5),
-            fontweight='bold'
-        )
+    x_o, y_o = mejor_pt
+    tipo_texto = "Máximo" if tipo_funcion == 'max' else "Mínimo"
+    print(f"\nPunto óptimo ({tipo_texto}): ({formato_numero(x_o)}, {formato_numero(y_o)}) con Z = {formato_numero(mejor_z)}")
+    
+    ax.plot(x_o, y_o, 'ro', markersize=10, label=f'Solución Óptima ({tipo_texto})', zorder=10)
+    ax.annotate(
+        f"SOLUCIÓN\n({formato_numero(x_o)}, {formato_numero(y_o)})\nZ={formato_numero(mejor_z)}",
+        (x_o, y_o), xytext=(15, 15), textcoords='offset points',
+        bbox=dict(boxstyle="round,pad=0.3", fc='yellow', alpha=0.5), fontweight='bold'
+    )
 
 
 # se encarga puramente de la logica matematica para filtrar y devolver soo los vertices que cumplen con todas las restricciones
-def obtener_puntos_factibles(intersecciones, Matriz, Restriccion):
-    optimos = []
-    for x, y in intersecciones:
-        if all((t == '<=' and a*x + b*y <= c + MARGEN) or
+def es_factible(x, y, Matriz, Restriccion):
+    return all((t == '<=' and a*x + b*y <= c + MARGEN) or
                (t == '>=' and a*x + b*y >= c - MARGEN) or
                (t == '=' and abs(a*x + b*y - c) <= MARGEN)
-               for (a, b, c), t in zip(Matriz, Restriccion)):
-            optimos.append((round(x, ROUND_DIG), round(y, ROUND_DIG)))
-    return list(set(optimos))
+               for (a, b, c), t in zip(Matriz, Restriccion))
+
+# se encarga puramente de la logica matematica para filtrar y devolver soo los vertices que cumplen con todas las restricciones
+def obtener_puntos_factibles(intersecciones, Matriz, Restriccion):
+    return list(set((round(x, ROUND_DIG), round(y, ROUND_DIG)) for x, y in intersecciones if es_factible(x, y, Matriz, Restriccion)))
 
 
 # Esta funcion se encarga de dibujar cada una de las rectas de la matriz, una por una de forma incremental.
@@ -180,31 +169,19 @@ def dibujar_poligono_factible(ax, optimos, Matriz, Restriccion, max_x, max_y):
     puntos = np.array(optimos) if len(optimos) > 0 else np.empty((0, 2))
     
     # Siempre verificamos puntos extra en los límites (para regiones no acotadas)
-    # Generamos multiples puntos en el límite superior y derecho para detectar regiones abiertas.
     lim_x, lim_y = max_x * ESCALA_HULL, max_y * ESCALA_HULL
-    extras = []
-    for i in np.linspace(0, lim_y, 100): 
-        extras.append([lim_x, i])
-    for i in np.linspace(0, lim_x, 100):
-        extras.append([i, lim_y])
+    extras = [[lim_x, i] for i in np.linspace(0, lim_y, 100)] + \
+             [[i, lim_y] for i in np.linspace(0, lim_x, 100)]
         
-    puntos_top = [] # puntos en el límite superior
-    puntos_right = [] # puntos en el límite derecho
-        
+    puntos_top, puntos_right, valid_extras = [], [], []
     for px, py in extras:
-        if all((t == '<=' and a*px + b*py <= c + MARGEN) or
-               (t == '>=' and a*px + b*py >= c - MARGEN) or
-               (t == '=' and abs(a*px + b*py - c) <= MARGEN)
-               for (a, b, c), t in zip(Matriz, Restriccion)):
-            if len(puntos) == 0:
-                puntos = np.array([[px, py]])
-            else:
-                puntos = np.vstack([puntos, [px, py]])
-                
-            if py == lim_y: # si py es igual a lim_y, entonces el punto está en el límite superior
-                puntos_top.append(px)
-            if px == lim_x: # si px es igual a lim_x, entonces el punto está en el límite derecho
-                puntos_right.append(py)
+        if es_factible(px, py, Matriz, Restriccion):
+            valid_extras.append([px, py])
+            if py == lim_y: puntos_top.append(px)
+            if px == lim_x: puntos_right.append(py)
+            
+    if valid_extras:
+        puntos = np.vstack([puntos, valid_extras]) if len(puntos) > 0 else np.array(valid_extras)
             
     if len(puntos) > 2:
         try:
@@ -265,8 +242,9 @@ def graficar_y_resolver(Matriz, Restriccion, intersecciones, obj, tipo):
     dibujar_poligono_factible(ax, optimos, Matriz, Restriccion, max_x, max_y)
     
     # 4. Marcar Vértices y Punto Óptimo
-    for x, y in intersecciones:
-        ax.plot(x, y, 'ko', markersize=4, zorder=5)
+    if intersecciones:
+        ix, iy = zip(*intersecciones)
+        ax.plot(ix, iy, 'ko', markersize=4, zorder=5)
     
     evaluar_optimo(optimos, obj, tipo, ax)
     ax.legend(fontsize=8, loc='upper right')
@@ -285,7 +263,6 @@ def iniciar_app():
     except Exception as e:
         print(f"\n[!] Ocurrió un error inesperado durante la ejecución: {e}")
         print("Asegúrese de cerrar las ventanas del gráfico antes de continuar o revise los datos ingresados.")
-
 
 if __name__ == "__main__":
     iniciar_app()
