@@ -197,35 +197,45 @@ def dibujar_lineas_restriccion(ax, Matriz, x_vals):
 
 # Esta funcion se encarga de dibujar el poligono factible, considerando si la region es acotada o no.
 def dibujar_poligono_factible(ax, optimos, Matriz, Restriccion, max_x, max_y):
-    tiene_mayor_igual = any(t == '>=' for t in Restriccion)
     region_no_acotada = False
+    puntos = np.array(optimos) if len(optimos) > 0 else np.empty((0, 2))
     
-    if len(optimos) > 2:
+    # Siempre verificamos puntos extra en los límites (para regiones no acotadas)
+    # Generamos multiples puntos en el límite superior y derecho para detectar regiones abiertas.
+    lim_x, lim_y = max_x * ESCALA_HULL, max_y * ESCALA_HULL
+    extras = []
+    for i in np.linspace(0, lim_y, 100): 
+        extras.append([lim_x, i])
+    for i in np.linspace(0, lim_x, 100):
+        extras.append([i, lim_y])
+        
+    for px, py in extras:
+        if all((t == '<=' and a*px + b*py <= c + MARGEN) or
+               (t == '>=' and a*px + b*py >= c - MARGEN) or
+               (t == '=' and abs(a*px + b*py - c) <= MARGEN)
+               for (a, b, c), t in zip(Matriz, Restriccion)):
+            if len(puntos) == 0:
+                puntos = np.array([[px, py]])
+            else:
+                puntos = np.vstack([puntos, [px, py]])
+            region_no_acotada = True
+            
+    if len(puntos) > 2:
         try:
-            puntos = np.array(optimos)
-            if tiene_mayor_igual:
-                lim_x, lim_y = max_x * ESCALA_HULL, max_y * ESCALA_HULL
-                extras = [[lim_x, 0], [0, lim_y], [lim_x, lim_y],
-                          [lim_x, lim_y * EXTRA_BORDE2], [lim_x * EXTRA_BORDE2, lim_y],
-                          [lim_x * EXTRA_BORDE1, lim_y], [lim_x, lim_y * EXTRA_BORDE1]]
-                for px, py in extras:
-                    if all((t == '<=' and a*px + b*py <= c + MARGEN) or
-                           (t == '>=' and a*px + b*py >= c - MARGEN) or
-                           (t == '=' and abs(a*px + b*py - c) <= MARGEN)
-                           for (a, b, c), t in zip(Matriz, Restriccion)):
-                        puntos = np.vstack([puntos, [px, py]])
-                        region_no_acotada = True
             hull = ConvexHull(puntos)
             verts = puntos[hull.vertices]
             ax.fill(verts[:, 0], verts[:, 1], alpha=ALPHA_REGION, color=COLOR_REGION)
             ax.plot(np.append(verts[:, 0], verts[0, 0]),
                     np.append(verts[:, 1], verts[0, 1]), COLOR_HULL, lw=LW_REGION)
         except:
-            ax.plot([p[0] for p in optimos], [p[1] for p in optimos], 'b-', lw=LW_LINEA)
-    elif len(optimos) == 2:
-        ax.plot([p[0] for p in optimos], [p[1] for p in optimos], 'b-', lw=LW_LINEA)
-    else:
-        ax.plot(optimos[0][0], optimos[0][1], 'bo', markersize=MS_REGION)
+            # Si ConvexHull falla (puntos colineales), es una región factible lineal (segmento o rayo)
+            p_ordenados = puntos[np.lexsort((puntos[:,1], puntos[:,0]))]
+            ax.plot(p_ordenados[:, 0], p_ordenados[:, 1], 'b-', lw=LW_LINEA)
+    elif len(puntos) == 2:
+        p_ordenados = puntos[np.lexsort((puntos[:,1], puntos[:,0]))]
+        ax.plot(p_ordenados[:, 0], p_ordenados[:, 1], 'b-', lw=LW_LINEA)
+    elif len(puntos) == 1:
+        ax.plot(puntos[0][0], puntos[0][1], 'bo', markersize=MS_REGION)
     
     if region_no_acotada:
         ax.annotate('', xy=(max_x * FLECHA_FIN, max_y * FLECHA_TRANS),
