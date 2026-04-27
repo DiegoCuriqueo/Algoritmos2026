@@ -3,10 +3,10 @@
 # by: Alex, Matias
 # UCT
 
-EPS_DET    = 1e-10   
-EPS_COORD  = 1e-5    
-MARGEN     = 1e-4    
-ROUND_DIG  = 4       
+EPS_DET    = 1e-10   # 
+EPS_COORD  = 1e-5    # 
+MARGEN     = 1e-4    # Margen de error para comparaciones de punto flotante.
+ROUND_DIG  = 4       # 
 MIN_RANGO  = 10      # Valor mínimo de referencia cuando no hay intersecciones grandes
 ESCALA_EJE = 1.1     # Factor de expansión de los límites de los ejes
 MARGEN_NEG = 0.05    # Fracción de margen negativo en los ejes (origen visual)
@@ -72,10 +72,22 @@ def leer_flotante(mensaje):
 
 #funcion que solicita al usuario ingresar los datos minimos necesarios para graficar las rectas.
 def ingresar_datos():
+    print("\nIngrese los coeficientes de la funcion Objetivo Z:")
+    Coeficiente_x = leer_flotante("Coeficiente de x: ")
+    Coeficiente_y = leer_flotante("Coeficiente de y: ")
+    
+    print("\n Que desea hacer con la funcion objetivo?\n1. Maximizar\n2. Minimizar")
+    opcion = input("Seleccione una opcion 1 o 2: ").strip()
+    while opcion not in ['1', '2']:
+        opcion = input(" Error. Seleccione una opcion 1 (Maximizar) o 2 (Minimizar): ").strip()
+        
+    tipo_funcion = 'max' if opcion == '1' else 'min'
+
+    print("\n--- Restricciones ---")
     n = leer_entero("Numero de restricciones: ")
     Matriz, Restriccion = [],[]
     for i in range(n):
-        print(f"\nIngrese los datos para las restricciones {i+1}: ")
+        print(f"\nIngrese los datos para la restriccion {i+1}: ")
         a = leer_flotante("Coeficiente de x(a): ")
         b = leer_flotante("Coeficiente de y(b): ")
         
@@ -87,17 +99,6 @@ def ingresar_datos():
         Matriz.append([a,b,c])
         Restriccion.append(Tipo_Restriccion)
         
-    print("\nIngrese los coeficientes de la funcion Objetivo Z:")
-    Coeficiente_x = leer_flotante("Coeficiente de x: ")
-    Coeficiente_y = leer_flotante("Coeficiente de y: ")
-    
-    print("\n Que desea hacer con la funcion objetivo?\n1. Maximizar\n2. Minimizar")
-    opcion = input("Seleccione una opcion 1 o 2: ").strip()
-    while opcion not in ['1', '2']:
-        opcion = input(" Error. Seleccione una opcion 1 (Maximizar) o 2 (Minimizar): ").strip()
-        
-    tipo_funcion = 'max' if opcion == '1' else 'min'
-    
     return np.array(Matriz), Restriccion, (Coeficiente_x,Coeficiente_y), tipo_funcion
     # el return devuelve una tupla con esos 4 elementos
 
@@ -133,6 +134,7 @@ def calcular_intersecciones(Matriz):
     for x, y in inter_unicas:
         print(f"Intersección: ({formato_numero(x)}, {formato_numero(y)})")                       
     return inter_unicas
+
 
 def evaluar_optimo(optimos, objetivo_funcion, tipo_funcion, ax):
     c_x, c_y = objetivo_funcion
