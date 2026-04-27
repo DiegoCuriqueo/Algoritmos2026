@@ -1,17 +1,69 @@
 import numpy as np
 import pandas as pd
 
+def leer_entero(mensaje):
+    """Lee un número entero y asegura que sea mayor a 0."""
+    while True:
+        try:
+            valor = int(input(mensaje))
+            if valor <= 0:
+                print("Error: Ingrese un número entero positivo mayor a 0.")
+                continue
+            return valor
+        except ValueError:
+            print("Error: Entrada inválida. Debe ingresar un número entero.")
+
+def leer_flotante(mensaje):
+    """Lee un número decimal, aceptando puntos o comas."""
+    while True:
+        try:
+            entrada = input(mensaje).replace(',', '.')
+            return float(entrada)
+        except ValueError:
+            print("Error: Entrada inválida. Debe ingresar un número válido.")
+
+def leer_lista_flotantes(mensaje, n_esperado):
+    """Lee varios números en una sola línea separados por espacio y valida la cantidad."""
+    while True:
+        try:
+            entrada = input(mensaje).replace(',', '.')
+            valores = [float(x) for x in entrada.split()]
+            if len(valores) == n_esperado:
+                return valores
+            else:
+                print(f"Error: Se esperaban {n_esperado} valores, pero ingresaste {len(valores)}.")
+        except ValueError:
+            print("Error: Asegúrate de ingresar solo números separados por un espacio.")
+
+def leer_signo(mensaje):
+    """Valida que el signo ingresado sea correcto para Simplex."""
+    while True:
+        signo = input(mensaje).strip()
+        if signo in ['<=', '>=', '=']:
+            return signo
+        print("Error: Ingresa un signo válido ('<=', '>=', o '=').")
+
+def leer_tipo_optimizacion(mensaje):
+    """Valida la opción de maximizar o minimizar."""
+    while True:
+        tipo = input(mensaje).strip().lower()
+        if tipo in ['max', 'min']:
+            return tipo
+        print("Error: Por favor, escribe solo 'max' o 'min'.")
+
+
+# --- FUNCIÓN PRINCIPAL DE ENTRADA DE DATOS ---
+
 def ingresar_datos():
     print("=== MÉTODO SIMPLEX DE 2 FASES ===")
-    tipo_opt = input("¿Desea Maximizar o Minimizar? (max/min): ").strip().lower()
     
-    n_vars = int(input("Ingrese la cantidad de variables de decisión: "))
-    n_rest = int(input("Ingrese la cantidad de restricciones: "))
+    tipo_opt = leer_tipo_optimizacion("¿Desea Maximizar o Minimizar? (max/min): ")
+    n_vars = leer_entero("Ingrese la cantidad de variables de decisión: ")
+    n_rest = leer_entero("Ingrese la cantidad de restricciones: ")
     
-    print(f"\nIngrese los {n_vars} coeficientes de la Función Objetivo (separados por espacio):")
-    # Acepta comas y puntos en la función objetivo
-    entrada_c = input().replace(',', '.')
-    c = np.array([float(x) for x in entrada_c.split()])
+    print("\n--- Función Objetivo ---")
+    c_list = leer_lista_flotantes(f"Ingrese los {n_vars} coeficientes (separados por espacio): ", n_vars)
+    c = np.array(c_list)
     
     if tipo_opt == 'max':
         c = -c # Convertimos a minimización internamente
@@ -22,16 +74,11 @@ def ingresar_datos():
     
     for i in range(n_rest):
         print(f"\n--- Restricción {i+1} ---")
-        # Acepta comas y puntos en los coeficientes
-        entrada_coefs = input(f"Coeficientes de las {n_vars} variables (separados por espacio): ").replace(',', '.')
-        coefs = [float(x) for x in entrada_coefs.split()]
+        coefs = leer_lista_flotantes(f"Coeficientes de las {n_vars} variables (separados por espacio): ", n_vars)
+        signo = leer_signo("Signo (<=, >=, =): ")
+        lado_derecho = leer_flotante("Lado derecho (término independiente): ")
         
-        signo = input("Signo (<=, >=, =): ").strip()
-        
-        # Acepta comas y puntos en el lado derecho
-        entrada_ld = input("Lado derecho (término independiente): ").replace(',', '.')
-        lado_derecho = float(entrada_ld)
-        
+        # Ajuste matemático: si el lado derecho es negativo, se multiplica por -1
         if lado_derecho < 0:
             coefs = [-x for x in coefs]
             lado_derecho = -lado_derecho
