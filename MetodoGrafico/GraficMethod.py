@@ -52,29 +52,51 @@ from itertools import combinations
 def formato_numero(num):
     return f"{int(num)}" if num == int(num) else f"{num:.2f}"
 
+def leer_entero(mensaje):
+    while True:
+        try:
+            valor = int(input(mensaje))
+            if valor <= 0:
+                print(" Error: Ingrese un número entero positivo mayor a 0.")
+                continue
+            return valor
+        except ValueError:
+            print(" Error: Entrada inválida. Debe ingresar un número entero.")
+
+def leer_flotante(mensaje):
+    while True:
+        try:
+            return float(input(mensaje))
+        except ValueError:
+            print(" Error: Entrada inválida. Debe ingresar un número válido.")
+
 #funcion que solicita al usuario ingresar los datos minimos necesarios para graficar las rectas.
 def ingresar_datos():
-    n = int(input("Numero de restricciones: "))
+    n = leer_entero("Numero de restricciones: ")
     Matriz, Restriccion = [],[]
     for i in range(n):
         print(f"\nIngrese los datos para las restricciones {i+1}: ")
-        a = float(input("Coeficiente de x(a): "))
-        b = float(input("Coeficiente de y(b): "))
+        a = leer_flotante("Coeficiente de x(a): ")
+        b = leer_flotante("Coeficiente de y(b): ")
         
         Tipo_Restriccion = input("Tipo de restricción (<=, >=, =): ").strip()
         while Tipo_Restriccion not in ['<=', '>=', '=']: 
-            Tipo_Restriccion = input("Tipo invalido. Ingrese <=, >= o =: ").strip()
+            Tipo_Restriccion = input(" Tipo invalido. Ingrese <=, >= o =: ").strip()
         
-        c = float(input("Termino Constante (c): "))
+        c = leer_flotante("Termino Constante (c): ")
         Matriz.append([a,b,c])
         Restriccion.append(Tipo_Restriccion)
         
     print("\nIngrese los coeficientes de la funcion Objetivo Z:")
-    Coeficiente_x = float(input("Coeficiente de x: "))
-    Coeficiente_y = float(input("Coeficiente de y: "))
+    Coeficiente_x = leer_flotante("Coeficiente de x: ")
+    Coeficiente_y = leer_flotante("Coeficiente de y: ")
     
     print("\n Que desea hacer con la funcion objetivo?\n1. Maximizar\n2. Minimizar")
-    tipo_funcion = 'max' if input("Seleccione una opcion 1 o 2: ").strip() == '1' else 'min'
+    opcion = input("Seleccione una opcion 1 o 2: ").strip()
+    while opcion not in ['1', '2']:
+        opcion = input(" Error. Seleccione una opcion 1 (Maximizar) o 2 (Minimizar): ").strip()
+        
+    tipo_funcion = 'max' if opcion == '1' else 'min'
     
     return np.array(Matriz), Restriccion, (Coeficiente_x,Coeficiente_y), tipo_funcion
     # el return devuelve una tupla con esos 4 elementos
@@ -92,9 +114,9 @@ def calcular_intersecciones(Matriz):
     print("\n --- Puntos de Interseccion ---")
     intersecciones = []
     ejes = np.array([
-    [1, 0, 0],  # x = 0  (eje Y)
-    [0, 1, 0]   # y = 0  (eje X)
-])
+        [1, 0, 0],  # x = 0  (eje Y)
+        [0, 1, 0]   # y = 0  (eje X)
+    ])
     todas_rectas = np.vstack((Matriz,ejes))
     
     for r1,r2 in combinations(todas_rectas,2):
@@ -107,7 +129,7 @@ def calcular_intersecciones(Matriz):
                 intersecciones.append((round(max(x, 0), 10), round(max(y, 0), 10))) # guardar el punto 
                 
     intersecciones.append((0.0, 0.0)) # origen
-    inter_unicas = list(set((round(x, 4), round(y, 4)) for x, y in intersecciones))
+    inter_unicas = list(set((round(x, ROUND_DIG), round(y, ROUND_DIG)) for x, y in intersecciones))
     for x, y in inter_unicas:
         print(f"Intersección: ({formato_numero(x)}, {formato_numero(y)})")                       
     return inter_unicas
@@ -143,26 +165,20 @@ def evaluar_optimo(optimos, objetivo_funcion, tipo_funcion, ax):
             fontweight='bold'
         )
 
+# se encarga puramente de la logica matematica para filtrar y devolver soo los vertices que cumplen con todas las restricciones
+def obtener_puntos_factibles(intersecciones, Matriz, Restriccion):
+    optimos = []
+    for x, y in intersecciones:
+        if all((t == '<=' and a*x + b*y <= c + MARGEN) or
+               (t == '>=' and a*x + b*y >= c - MARGEN) or
+               (t == '=' and abs(a*x + b*y - c) <= MARGEN)
+               for (a, b, c), t in zip(Matriz, Restriccion)):
+            optimos.append((round(x, ROUND_DIG), round(y, ROUND_DIG)))
+    return list(set(optimos))
 
 
-
-# Grafica el sistema de inecuaciones, pinta el area factible y llama a la funcion de evaluacion     
-def graficar_y_resolver(Matriz, Restriccion, intersecciones, obj, tipo):
-    fig, ax = plt.subplots(figsize=(FIG_W, FIG_H))
-    ax.set_title("Método Gráfico (Restricciones)")
-    ax.grid(True, linestyle='--', alpha=ALPHA_GRID)
-    ax.axhline(0, color=COLOR_GRID_H, linewidth=0.8)
-    ax.axvline(0, color=COLOR_GRID_H, linewidth=0.8)
-    
-    # Límites
-    tiene_mayor_igual = any(t == '>=' for t in Restriccion)
-    max_x = max([x for x, y in intersecciones] + [MIN_RANGO]) * ESCALA_EJE
-    max_y = max([y for x, y in intersecciones] + [MIN_RANGO]) * ESCALA_EJE
-    ax.set_xlim(-max_x * MARGEN_NEG, max_x)
-    ax.set_ylim(-max_y * MARGEN_NEG, max_y)
-    x_vals = np.linspace(-max_x * MARGEN_NEG, max_x, N_PUNTOS_X)
-    
-    # Graficar rectas
+# Esta funcion se encarga de dibujar cada una de las rectas de la matriz, una por una de forma incremental.
+def dibujar_lineas_restriccion(ax, Matriz, x_vals):
     plt.ion()
     colores = plt.colormaps['tab10'].colors
     for i, (a, b, c) in enumerate(Matriz):
@@ -175,24 +191,13 @@ def graficar_y_resolver(Matriz, Restriccion, intersecciones, obj, tipo):
         ax.legend(fontsize=FONTSIZE, loc='upper right')
         plt.pause(PAUSA_SEG)
     plt.ioff()
-    
-    # Filtrar puntos factibles
-    optimos = []
-    for x, y in intersecciones:
-        if all((t == '<=' and a*x + b*y <= c + MARGEN) or
-               (t == '>=' and a*x + b*y >= c - MARGEN) or
-               (t == '=' and abs(a*x + b*y - c) <= MARGEN)
-               for (a, b, c), t in zip(Matriz, Restriccion)):
-            optimos.append((round(x, ROUND_DIG), round(y, ROUND_DIG)))
-    
-    optimos = list(set(optimos))
-    if not optimos:
-        print("\nNo hay región factible.")
-        plt.show()
-        return
-    
-    # Dibujar región factible
+
+
+# Esta funcion se encarga de dibujar el poligono factible, considerando si la region es acotada o no.
+def dibujar_poligono_factible(ax, optimos, Matriz, Restriccion, max_x, max_y):
+    tiene_mayor_igual = any(t == '>=' for t in Restriccion)
     region_no_acotada = False
+    
     if len(optimos) > 2:
         try:
             puntos = np.array(optimos)
@@ -220,7 +225,6 @@ def graficar_y_resolver(Matriz, Restriccion, intersecciones, obj, tipo):
     else:
         ax.plot(optimos[0][0], optimos[0][1], 'bo', markersize=MS_REGION)
     
-    # Flechas región no acotada
     if region_no_acotada:
         ax.annotate('', xy=(max_x * FLECHA_FIN, max_y * FLECHA_TRANS),
                     xytext=(max_x * FLECHA_INICIO, max_y * FLECHA_TRANS),
@@ -228,8 +232,37 @@ def graficar_y_resolver(Matriz, Restriccion, intersecciones, obj, tipo):
         ax.annotate('', xy=(max_x * FLECHA_TRANS, max_y * FLECHA_FIN),
                     xytext=(max_x * FLECHA_TRANS, max_y * FLECHA_INICIO),
                     arrowprops=dict(arrowstyle='->', color=COLOR_FLECHA, lw=LW_FLECHA))
+
+
+# Grafica el sistema de inecuaciones, pinta el area factible y llama a la funcion de evaluacion     
+def graficar_y_resolver(Matriz, Restriccion, intersecciones, obj, tipo):
+    fig, ax = plt.subplots(figsize=(FIG_W, FIG_H))
+    ax.set_title("Método Gráfico (Restricciones)")
+    ax.grid(True, linestyle='--', alpha=ALPHA_GRID)
+    ax.axhline(0, color=COLOR_GRID_H, linewidth=0.8)
+    ax.axvline(0, color=COLOR_GRID_H, linewidth=0.8)
     
-    # Vértices y óptimo
+    # Configurar Límites
+    max_x = max([x for x, y in intersecciones] + [MIN_RANGO]) * ESCALA_EJE
+    max_y = max([y for x, y in intersecciones] + [MIN_RANGO]) * ESCALA_EJE
+    ax.set_xlim(-max_x * MARGEN_NEG, max_x)
+    ax.set_ylim(-max_y * MARGEN_NEG, max_y)
+    
+    # 1. Graficar rectas
+    x_vals = np.linspace(-max_x * MARGEN_NEG, max_x, N_PUNTOS_X)
+    dibujar_lineas_restriccion(ax, Matriz, x_vals)
+    
+    # 2. Obtener puntos factibles
+    optimos = obtener_puntos_factibles(intersecciones, Matriz, Restriccion)
+    if not optimos:
+        print("\nNo hay región factible.")
+        plt.show()
+        return
+    
+    # 3. Dibujar región factible (polígono y flechas)
+    dibujar_poligono_factible(ax, optimos, Matriz, Restriccion, max_x, max_y)
+    
+    # 4. Marcar Vértices y Punto Óptimo
     for x, y in intersecciones:
         ax.plot(x, y, COLOR_VERTICE, markersize=MS_VERTICE, zorder=5)
     
@@ -237,12 +270,18 @@ def graficar_y_resolver(Matriz, Restriccion, intersecciones, obj, tipo):
     ax.legend(fontsize=FONTSIZE, loc='upper right')
     plt.show()
 
+# funcion principal que coordina el flujo del programa
 def iniciar_app():
-    """Función principal que coordina el flujo completo del algoritmo."""
-    Matriz, Restriccion, obj, tipo_funcion = ingresar_datos()
-    mostrar_ecuaciones(Matriz, Restriccion)
-    intersecciones = calcular_intersecciones(Matriz)
-    graficar_y_resolver(Matriz, Restriccion, intersecciones, obj, tipo_funcion)
+    try:
+        Matriz, Restriccion, obj, tipo_funcion = ingresar_datos()
+        mostrar_ecuaciones(Matriz, Restriccion)
+        intersecciones = calcular_intersecciones(Matriz)
+        graficar_y_resolver(Matriz, Restriccion, intersecciones, obj, tipo_funcion)
+    except KeyboardInterrupt:
+        print("\n[!] Programa interrumpido por el usuario.")
+    except Exception as e:
+        print(f"\n[!] Ocurrió un error inesperado durante la ejecución: {e}")
+        print("Asegúrese de cerrar las ventanas del gráfico antes de continuar o revise los datos ingresados.")
 
 if __name__ == "__main__":
     iniciar_app()
