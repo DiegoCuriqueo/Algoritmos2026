@@ -197,7 +197,6 @@ def dibujar_lineas_restriccion(ax, Matriz, x_vals):
 
 # Esta funcion se encarga de dibujar el poligono factible, considerando si la region es acotada o no.
 def dibujar_poligono_factible(ax, optimos, Matriz, Restriccion, max_x, max_y):
-    region_no_acotada = False
     puntos = np.array(optimos) if len(optimos) > 0 else np.empty((0, 2))
     
     # Siempre verificamos puntos extra en los límites (para regiones no acotadas)
@@ -209,6 +208,9 @@ def dibujar_poligono_factible(ax, optimos, Matriz, Restriccion, max_x, max_y):
     for i in np.linspace(0, lim_x, 100):
         extras.append([i, lim_y])
         
+    puntos_top = [] # puntos en el límite superior
+    puntos_right = [] # puntos en el límite derecho
+        
     for px, py in extras:
         if all((t == '<=' and a*px + b*py <= c + MARGEN) or
                (t == '>=' and a*px + b*py >= c - MARGEN) or
@@ -218,7 +220,11 @@ def dibujar_poligono_factible(ax, optimos, Matriz, Restriccion, max_x, max_y):
                 puntos = np.array([[px, py]])
             else:
                 puntos = np.vstack([puntos, [px, py]])
-            region_no_acotada = True
+                
+            if py == lim_y: # si py es igual a lim_y, entonces el punto está en el límite superior
+                puntos_top.append(px)
+            if px == lim_x: # si px es igual a lim_x, entonces el punto está en el límite derecho
+                puntos_right.append(py)
             
     if len(puntos) > 2:
         try:
@@ -237,12 +243,16 @@ def dibujar_poligono_factible(ax, optimos, Matriz, Restriccion, max_x, max_y):
     elif len(puntos) == 1:
         ax.plot(puntos[0][0], puntos[0][1], 'bo', markersize=MS_REGION)
     
-    if region_no_acotada:
-        ax.annotate('', xy=(max_x * FLECHA_FIN, max_y * FLECHA_TRANS),
-                    xytext=(max_x * FLECHA_INICIO, max_y * FLECHA_TRANS),
+    if puntos_top: # si existen puntos en el límite superior, dibuja una flecha en el eje Y
+        x_promedio = np.mean(puntos_top)
+        ax.annotate('', xy=(x_promedio, max_y * FLECHA_FIN),
+                    xytext=(x_promedio, max_y * FLECHA_INICIO),
                     arrowprops=dict(arrowstyle='->', color=COLOR_FLECHA, lw=LW_FLECHA))
-        ax.annotate('', xy=(max_x * FLECHA_TRANS, max_y * FLECHA_FIN),
-                    xytext=(max_x * FLECHA_TRANS, max_y * FLECHA_INICIO),
+                    
+    if puntos_right: # si existen puntos en el límite derecho, dibuja una flecha en el eje X
+        y_promedio = np.mean(puntos_right)
+        ax.annotate('', xy=(max_x * FLECHA_FIN, y_promedio),
+                    xytext=(max_x * FLECHA_INICIO, y_promedio),
                     arrowprops=dict(arrowstyle='->', color=COLOR_FLECHA, lw=LW_FLECHA))
 
 
