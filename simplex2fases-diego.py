@@ -78,7 +78,6 @@ def ingresar_datos():
         signo = leer_signo("Signo (<=, >=, =): ")
         lado_derecho = leer_flotante("Lado derecho (término independiente): ")
         
-        # Ajuste matemático: si el lado derecho es negativo, se multiplica por -1
         if lado_derecho < 0:
             coefs = [-x for x in coefs]
             lado_derecho = -lado_derecho
@@ -101,16 +100,22 @@ def mostrar_tablero(tablero, columnas, titulo):
     print(df.to_string())
     print("=" * 70)
 
-def resolver_simplex(tablero, n_vars_totales, fase):
+def resolver_simplex(tablero, fase):
     filas, cols = tablero.shape
     
     while True:
-        costos_reducidos = tablero[0, :-1]
+        # 1. Condición de parada y búsqueda de pivote
+        # Buscamos en los costos reducidos (Fila 0), PERO ignoramos la columna 0 (que es Z) 
+        # y la última columna (que es el lado derecho).
+        costos_reducidos = tablero[0, 1:-1]
+        
         if np.all(costos_reducidos >= -1e-7):
             break
             
-        col_pivote = np.argmin(costos_reducidos)
+        # +1 porque recortamos la columna Z al buscar, así recuperamos el índice real
+        col_pivote = np.argmin(costos_reducidos) + 1 
         
+        # 3. Variable de salida (prueba del cociente mínimo)
         columna_entrada = tablero[1:, col_pivote]
         lados_derechos = tablero[1:, -1]
         
@@ -123,8 +128,9 @@ def resolver_simplex(tablero, n_vars_totales, fase):
             print("\nEl problema tiene solución ilimitada.")
             return None
             
-        fila_pivote = np.argmin(cocientes) + 1
+        fila_pivote = np.argmin(cocientes) + 1 
         
+        # 4. Operaciones elementales de fila (Gauss-Jordan)
         elemento_pivote = tablero[fila_pivote, col_pivote]
         tablero[fila_pivote, :] = tablero[fila_pivote, :] / elemento_pivote
         
@@ -144,21 +150,25 @@ def metodo_dos_fases():
     
     n_totales = n_vars + n_holgura + n_exceso + n_artificiales
     
-    tablero = np.zeros((n_rest + 1, n_totales + 1))
-    tablero[1:, :n_vars] = A
+    # +2 en columnas: 1 para la columna de Z al inicio, y 1 para el LD al final
+    tablero = np.zeros((n_rest + 1, n_totales + 2))
+    
+    # LA COLUMNA Z: 1 en la función objetivo, 0 en las restricciones
+    tablero[0, 0] = 1 
+    
+    # Las variables originales se desplazan +1 por la columna Z
+    tablero[1:, 1:n_vars+1] = A
     tablero[1:, -1] = b
     
-    # Generar nombres de columnas dinámicamente
     cols_vars = [f"X{i+1}" for i in range(n_vars)]
     cols_holg_exc = []
     cols_artif = []
     
-    idx_holgura_exceso = n_vars
-    idx_artificial = n_vars + n_holgura + n_exceso
+    idx_holgura_exceso = n_vars + 1 # Se desplaza 1 por la Z
+    idx_artificial = n_vars + n_holgura + n_exceso + 1 # Se desplaza 1 por la Z
     
     filas_artificiales = []
-    
-    c_s, c_e, c_a = 1, 1, 1 # Contadores para nombres (S1, E1, A1...)
+    c_s, c_e, c_a = 1, 1, 1 
     
     for i, signo in enumerate(signos):
         if signo == '<=':
@@ -184,23 +194,22 @@ def metodo_dos_fases():
             cols_artif.append(f"A{c_a}")
             c_a += 1
 
-    columnas_fase1 = cols_vars + cols_holg_exc + cols_artif + ["LD"]
-    columnas_fase2 = cols_vars + cols_holg_exc + ["LD"]
+    columnas_fase1 = ["Z"] + cols_vars + cols_holg_exc + cols_artif + ["LD"]
+    columnas_fase2 = ["Z"] + cols_vars + cols_holg_exc + ["LD"]
 
-    # FASE 1
+    # --- FASE 1 ---
     if n_artificiales > 0:
-        for i in range(n_vars + n_holgura + n_exceso, n_totales):
+        # Llenar 1s en la fila 0 solo para las columnas artificiales
+        for i in range(n_vars + n_holgura + n_exceso + 1, n_totales + 1):
             tablero[0, i] = 1
             
         for fila in filas_artificiales:
             tablero[0, :] -= tablero[fila, :]
             
         mostrar_tablero(tablero, columnas_fase1, "TABLERO INICIAL (INICIO DE FASE 1)")
+        tablero = resolver_simplex(tablero, 1)
         
-        tablero = resolver_simplex(tablero, n_totales, 1)
-        
-        if tablero is None:
-            return
+        if tablero is None: return
             
         if abs(tablero[0, -1]) > 1e-7:
             print("\nEl problema es INFACTIBLE (no tiene solución posible).")
@@ -208,25 +217,29 @@ def metodo_dos_fases():
     else:
         print("\nNo se requieren variables artificiales. Omitiendo Fase 1.")
 
-    # FASE 2
+    # --- FASE 2 ---
     if n_artificiales > 0:
-        cols_a_mantener = list(range(n_vars + n_holgura + n_exceso)) + [-1]
+        # Mantenemos Z(0), las vars de decisión, holguras, excesos, y el LD(-1)
+        cols_a_mantener = [0] + list(range(1, n_vars + n_holgura + n_exceso + 1)) + [-1]
         tablero = tablero[:, cols_a_mantener]
         
+    # Resetear F.O. pero manteniendo Z en 1
     tablero[0, :] = 0
-    tablero[0, :n_vars] = c
+    tablero[0, 0] = 1
+    tablero[0, 1:n_vars+1] = c # Insertamos la F.O original desplazada en 1
     
+    # Restaurar la estructura de la base
     filas, cols = tablero.shape
     for i in range(1, filas):
-        for j in range(cols - 1):
+        # Buscamos base ignorando la columna Z (j=0) y el LD (j=cols-1)
+        for j in range(1, cols - 1):
             if tablero[i, j] == 1 and np.sum(np.abs(tablero[1:, j])) == 1:
                 if tablero[0, j] != 0:
                     tablero[0, :] -= tablero[0, j] * tablero[i, :]
                 break
                 
-    mostrar_tablero(tablero, columnas_fase2, "TABLERO INICIAL FASE 2 (Variables artificiales eliminadas)")
-                
-    tablero = resolver_simplex(tablero, n_vars + n_holgura + n_exceso, 2)
+    mostrar_tablero(tablero, columnas_fase2, "TABLERO INICIAL FASE 2")
+    tablero = resolver_simplex(tablero, 2)
     
     if tablero is not None:
         mostrar_tablero(tablero, columnas_fase2, "TABLERO ÓPTIMO FINAL")
@@ -235,12 +248,11 @@ def metodo_dos_fases():
         z_opt = -tablero[0, -1] if tipo_opt == 'max' else tablero[0, -1]
         print(f"Valor Óptimo (Z) = {np.round(z_opt, 4)}")
         
-        for j in range(n_vars):
+        for j in range(1, n_vars + 1):
             valor = 0
             if np.sum(np.abs(tablero[1:, j])) == 1 and np.max(tablero[1:, j]) == 1:
                 fila_basica = np.where(tablero[1:, j] == 1)[0][0] + 1
                 valor = tablero[fila_basica, -1]
-            print(f"X{j+1} = {np.round(valor, 4)}")
-
+            print(f"X{j} = {np.round(valor, 4)}")
 if __name__ == "__main__":
     metodo_dos_fases()
